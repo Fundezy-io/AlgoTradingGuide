@@ -41,7 +41,7 @@ def test_btcusd():
             print(f"✅ BTCUSD positions: {len(btc_positions)}")
             
             print("\n🎉 BTCUSD connectivity test passed!")
-            print("🚀 You can now run: python quick_test_trading_bot.py")
+            print("🚀 You can now run: python quick_test_bot.py")
             
         except Exception as e:
             print(f"❌ Error during BTCUSD testing: {e}")

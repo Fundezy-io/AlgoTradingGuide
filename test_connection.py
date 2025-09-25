@@ -32,7 +32,7 @@ def test_connection():
                 print("⚠️ No historical data available")
             
             print("\n🎉 All tests passed! Your setup is working correctly.")
-            print("🚀 You can now run: python simple_trading_bot.py")
+            print("🚀 You can now run: python quick_test_bot.py")
             
         except Exception as e:
             print(f"❌ Error during testing: {e}")
