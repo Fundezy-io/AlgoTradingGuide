@@ -9,13 +9,13 @@ class QuickTestTradingBot:
         self.symbol = 'BTCUSD'  # 24/7 crypto market
         self.volume = 0.01  # Small position size for testing
         self.test_interval = 10  # 10 seconds between actions
-        self.max_positions = 3  # Maximum positions to hold at once
+        self.max_positions = 2  # Maximum positions to hold at once
         
     def get_random_signal(self):
         """Generate random trading signals for testing"""
         signals = ['BUY', 'SELL', 'HOLD']
-        # 70% chance of trading, 30% chance of hold
-        weights = [0.35, 0.35, 0.30]
+        # 40% chance of BUY, 40% chance of SELL, 20% chance of HOLD
+        weights = [0.4, 0.4, 0.2]
         return random.choices(signals, weights=weights)[0]
     
     def execute_random_trade(self, signal):
@@ -227,22 +227,94 @@ class QuickTestTradingBot:
                 print(f"❌ Error in trading cycle: {e}")
                 time.sleep(5)  # Wait 5 seconds before retry
 
+    def run_auto_quick_test(self):
+        """Run automatic 2-minute quick test (matches documentation)"""
+        print(f"🚀 Starting Auto Quick Test Bot for {self.symbol}")
+        print(f"⚡ Test interval: {self.test_interval} seconds")
+        print(f"⏱️ Test duration: 2 minutes (12 cycles)")
+        print(f"📊 Max positions: {self.max_positions}")
+        print(f"💰 Position size: {self.volume}")
+        print("⚠️ Press Ctrl+C to stop early\n")
+        
+        # Login first
+        if not self.client.login():
+            print("❌ Login failed")
+            return
+            
+        # Run for 12 cycles (2 minutes)
+        for cycle in range(1, 13):
+            try:
+                print(f"🔄 === Cycle {cycle}/12 ===")
+                
+                # Get account info
+                balance_data = self.client.get_balance()
+                balance = balance_data.get('balance', 'Unknown')
+                equity = balance_data.get('equity', 'Unknown') 
+                print(f"💰 Balance: ${balance}, Equity: ${equity}")
+                
+                # Generate random signal
+                signal = self.get_random_signal()
+                print(f"🎲 Signal: {signal}")
+                
+                # Execute random trade
+                self.execute_random_trade(signal)
+                
+                # Show current positions
+                positions = self.client.get_open_positions()
+                btc_positions = [pos for pos in positions if pos.get('symbol') == self.symbol]
+                print(f"📊 Open positions: {len(btc_positions)}")
+                
+                if btc_positions:
+                    for pos in btc_positions:
+                        print(f"   • {pos.get('side')} {pos.get('volume')} - ID: {pos.get('id')[:8]}...")
+                
+                # Wait for next cycle (except last one)
+                if cycle < 12:
+                    print(f"⏳ Waiting {self.test_interval} seconds...\n")
+                    time.sleep(self.test_interval)
+                
+            except KeyboardInterrupt:
+                print("\n🛑 Test stopped by user")
+                break
+            except Exception as e:
+                print(f"❌ Error in cycle {cycle}: {e}")
+                time.sleep(3)
+        
+        print(f"\n🏁 Auto test completed!")
+        
+        # Final position summary
+        try:
+            final_positions = self.client.get_open_positions()
+            btc_final = [pos for pos in final_positions if pos.get('symbol') == self.symbol]
+            print(f"📊 Final {self.symbol} positions: {len(btc_final)}")
+            
+            if btc_final:
+                print("📋 Remaining positions:")
+                for pos in btc_final:
+                    print(f"   • {pos.get('side')} {pos.get('volume')} - ID: {pos.get('id')[:8]}...")
+                print("💡 These positions will remain open for manual management")
+        except Exception as e:
+            print(f"⚠️ Could not get final position summary: {e}")
+
 if __name__ == "__main__":
     bot = QuickTestTradingBot()
     
     print("🎯 Choose test mode:")
-    print("1. Quick test (5 minutes)")
-    print("2. Extended test (10 minutes)")
-    print("3. Continuous trading (until stopped)")
+    print("1. Auto quick test (2 minutes)")
+    print("2. Quick test (5 minutes)")
+    print("3. Extended test (10 minutes)")
+    print("4. Continuous trading (until stopped)")
     
-    choice = input("Enter your choice (1-3): ").strip()
+    choice = input("Enter your choice (1-4): ").strip()
     
     if choice == "1":
-        bot.run_quick_test(duration_minutes=5)
+        bot.run_auto_quick_test()
     elif choice == "2":
-        bot.run_quick_test(duration_minutes=10)
+        bot.run_quick_test(duration_minutes=5)
     elif choice == "3":
+        bot.run_quick_test(duration_minutes=10)
+    elif choice == "4":
         bot.run_continuous()
     else:
-        print("Invalid choice. Running 5-minute quick test...")
-        bot.run_quick_test(duration_minutes=5)
+        print("Invalid choice. Running 2-minute auto test...")
+        bot.run_auto_quick_test()

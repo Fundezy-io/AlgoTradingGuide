@@ -8,10 +8,10 @@ Follow these 5 simple steps to get your first Python trading algorithm running:
 
 1. **[Setup Environment](#prerequisites)** - Install Python dependencies
 2. **[Configure Credentials](#environment-setup)** - Set up your trading account credentials  
-3. **[Copy Base Code](#python-api-client)** - Use our ready-to-use Fundezy Python client
-4. **[Quick Test](#quick-test-algorithm)** - Rapid 2-minute validation (recommended first)
-5. **[Test System](#running-your-algorithm)** - Verify complete trading pipeline
-6. **[Run Algorithm](#simple-algorithm-example)** - Start live trading
+3. **[Python API Client](#python-api-client)** - Use our ready-to-use Fundezy Python client
+4. **[Quick Test Bot](#quick-test-algorithm)** - Complete trading bot with multiple test modes
+5. **[Test Connection](#running-your-algorithm)** - Verify platform connectivity
+6. **[Start Trading](#running-your-algorithm)** - Run the trading bot
 
 **🎯 Complete Trading System**: This guide provides a fully functional trading system with position management, real-time data, and live trading capabilities.
 
@@ -20,10 +20,9 @@ Follow these 5 simple steps to get your first Python trading algorithm running:
 1. [Prerequisites](#prerequisites)
 2. [Environment Setup](#environment-setup)
 3. [Python API Client](#python-api-client)
-4. [Simple Algorithm Example](#simple-algorithm-example)
-5. [Quick Test Algorithm](#quick-test-algorithm)
-6. [Running Your Algorithm](#running-your-algorithm)
-7. [Troubleshooting](#troubleshooting)
+4. [Quick Test Bot](#quick-test-algorithm)
+5. [Running Your Algorithm](#running-your-algorithm)
+6. [Troubleshooting](#troubleshooting)
 
 ## Introduction
 
@@ -43,10 +42,25 @@ This guide shows you how to build Python trading algorithms that can:
 ## Prerequisites
 
 ### Python Requirements
+
+Install the required dependencies:
+
 ```bash
 pip install requests
 pip install pandas
 pip install numpy
+```
+
+Or create a `requirements.txt` file with:
+```
+requests
+pandas
+numpy
+```
+
+Then install with:
+```bash
+pip install -r requirements.txt
 ```
 
 ### Required Credentials
@@ -55,10 +69,11 @@ pip install numpy
 
 ## Environment Setup
 
-Set your credentials via environment variables. Copy `env.example` to `.env` and fill real values:
+Set your credentials via environment variables. Create a `.env` file in the project root with your real values:
+
 ```bash
-cp env.example .env
-# then edit .env
+# Create .env file with your credentials
+touch .env
 ```
 
 Required variables in `.env`:
@@ -69,374 +84,30 @@ FTP_PASSWORD=your-password
 FTP_BROKER_ID=107
 ```
 
-The provided `config.py` reads these from environment variables, so nothing sensitive is committed to git.
+The `config.py` file includes the template in its comments for easy reference. All sensitive data is loaded from environment variables, so nothing sensitive is committed to git.
 
 ## Python API Client
 
-Copy and save this code as `fundezy_trading_client.py`:
+The project includes a complete trading client in `fundezy_trading_client.py`. This file provides:
 
-```python
-import requests
-import os
-from datetime import datetime, timedelta
-import json
-from typing import Dict, List, Optional, Any
-import config
+### Key Features:
+- **Authentication**: Automatic login and token management
+- **Trading Methods**: Open/close positions, get balance, retrieve candles
+- **Error Handling**: Robust error handling with automatic retry
+- **Position Management**: Individual position control with proper API format
+- **Real-time Data**: Access to live market data and account information
 
-class FundezyTradingClient:
-    def __init__(self):
-        # Fundezy Trading Platform API configuration
-        self.base_url = config.FTP_API_BASE_URL
-        self.login_endpoint = "/manager/mtr-login"
-        self.trading_api_base = f"{config.FTP_API_BASE_URL}/mtr-api"
-        
-        self.email = config.FTP_EMAIL
-        self.password = config.FTP_PASSWORD
-        self.broker_id = config.FTP_BROKER_ID
-        
-        self.session = requests.Session()
-        self.auth_token = None
-        self.trading_api_token = None
-        self.trading_account_id = None
-        self.system_uuid = None  # Required for trading API URLs
-        self.accounts = []
-        self.selected_account = None
-        self.token_expiry = None
-        
-    def login(self) -> bool:
-        """Authenticate with Fundezy platform"""
-        try:
-            # MTR login authentication
-            login_data = {
-                "email": self.email,
-                "password": self.password,
-                "brokerId": self.broker_id
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}{self.login_endpoint}",
-                json=login_data,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                # Extract authentication data
-                self.auth_token = data.get('token')
-                self.accounts = data.get('accounts', [])
-                self.selected_account = data.get('selectedAccount')
-                
-                # Extract trading API details from selected account
-                if self.selected_account:
-                    self.trading_api_token = self.selected_account.get('tradingApiToken')
-                    self.trading_account_id = self.selected_account.get('tradingAccountId')
-                    
-                    # Extract system UUID for trading API URLs
-                    system_info = self.selected_account.get('offer', {}).get('system', {})
-                    self.system_uuid = system_info.get('uuid')
-                
-                # Set token expiry
-                self.token_expiry = datetime.now() + timedelta(hours=24)
-                
-                print(f"✅ Login successful")
-                print(f"📧 Email: {data.get('email')}")
-                print(f"🎫 Auth token acquired")
-                print(f"💰 Found {len(self.accounts)} trading accounts")
-                print(f"🎯 Selected account: {self.trading_account_id}")
-                print(f"🔑 System UUID: {self.system_uuid}")
-                
-                return True
-            else:
-                print(f"❌ Login failed: {response.status_code}")
-                print(f"Response: {response.text}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Login error: {str(e)}")
-            return False
-    
-    def _get_trading_headers(self) -> Dict[str, str]:
-        """Get headers for trading API requests"""
-        # Check if token needs refresh
-        if not self.auth_token or datetime.now() >= self.token_expiry:
-            if not self.login():
-                raise Exception("Failed to authenticate")
-        
-        # Headers format for trading API
-        return {
-            'Auth-trading-api': self.trading_api_token,
-            'Cookie': f'co-auth={self.auth_token}',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-    
-    def _make_trading_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
-                             params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make trading API request"""
-        
-        if not self.system_uuid:
-            raise Exception("System UUID not available - ensure login is successful")
-            
-        # Build URL with system UUID
-        url = f"{self.trading_api_base}/{self.system_uuid}{endpoint}"
-        headers = self._get_trading_headers()
-        
-        try:
-            if method == 'GET':
-                response = self.session.get(url, headers=headers, params=params)
-            elif method == 'POST':
-                response = self.session.post(url, headers=headers, json=data)
-            elif method == 'PUT':
-                response = self.session.put(url, headers=headers, json=data)
-            elif method == 'DELETE':
-                response = self.session.delete(url, headers=headers, json=data)
-            
-            if response.status_code in [200, 201]:
-                return response.json()
-            else:
-                raise Exception(f"Trading API error: {response.status_code} - {response.text}")
-                
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Network error: {str(e)}")
-    
-    # Trading API methods
-    def get_balance(self) -> Dict[str, Any]:
-        """Get account balance"""
-        return self._make_trading_request('GET', '/balance')
-    
-    def get_candles(self, symbol: str, interval: str = 'H1', count: int = 100) -> Dict[str, Any]:
-        """Get historical candle data"""
-        params = {
-            'symbol': symbol,
-            'interval': interval,
-            'count': count
-        }
-        return self._make_trading_request('GET', '/candles', params=params)
-    
-    def open_position(self, instrument: str, order_side: str, volume: float, 
-                     sl_price: float = 0, tp_price: float = 0) -> Dict[str, Any]:
-        """Open trading position"""
-        data = {
-            "instrument": instrument,
-            "orderSide": order_side.upper(),  # BUY or SELL
-            "volume": volume,
-            "slPrice": sl_price,
-            "tpPrice": tp_price,
-            "isMobile": False
-        }
-        return self._make_trading_request('POST', '/position/open', data)
-    
-    def close_position(self, position_id: str, instrument: str, order_side: str, volume: float) -> Dict[str, Any]:
-        """Close a single position"""
-        data = {
-            "positionId": position_id,
-            "instrument": instrument,
-            "orderSide": order_side,
-            "volume": str(volume)
-        }
-        return self._make_trading_request('POST', '/position/close', data)
-    
-    def close_positions(self, position_ids: List[str]) -> Dict[str, Any]:
-        """Close multiple positions (backward compatibility) - deprecated"""
-        print("⚠️ close_positions is deprecated - use close_position for individual positions")
-        data = {"positionIds": position_ids}
-        return self._make_trading_request('POST', '/position/close', data)
-    
-    # Convenience methods for backward compatibility
-    def get_account_info(self) -> Dict[str, Any]:
-        """Get account balance (backward compatibility)"""
-        return self.get_balance()
-    
-    def get_open_positions(self) -> List[Dict[str, Any]]:
-        """Get open positions"""
-        try:
-            # Get positions from API
-            response = self._make_trading_request('GET', '/open-positions')
-            
-            # Return positions array from response
-            if isinstance(response, dict) and 'positions' in response:
-                return response['positions']
-            elif isinstance(response, list):
-                return response
-            else:
-                return []
-                
-        except Exception as e:
-            print(f"❌ Get positions error: {e}")
-            return []
-    
-    def get_current_price(self, symbol: str) -> Dict[str, Any]:
-        """Get current price from market watch"""
-        try:
-            market_data = self._make_trading_request('GET', '/market-watch')
-            return market_data
-        except:
-            return {}  # Return empty dict if market watch not working
-    
-    def get_historical_data(self, symbol: str, timeframe: str = 'H1', count: int = 100) -> List[Dict[str, Any]]:
-        """Get historical data (backward compatibility)"""
-        response = self.get_candles(symbol, timeframe, count)
-        return response.get('candles', [])
-```
-
-## Simple Algorithm Example
-
-Copy and save this code as `simple_trading_bot.py`:
-
-```python
-import pandas as pd
-import time
-from fundezy_trading_client import FundezyTradingClient
-
-class SimpleMovingAverageBot:
-    def __init__(self):
-        self.client = FundezyTradingClient()
-        self.symbol = 'EURUSD'
-        self.volume = 0.01  # Small position size
-        self.fast_period = 10
-        self.slow_period = 20
-        
-    def get_moving_averages(self):
-        """Get historical data and calculate moving averages"""
-        try:
-            # Get last 100 hourly candles using the official API
-            candle_response = self.client.get_candles(self.symbol, 'H1', 100)
-            
-            # Extract the candles array from the response
-            if not candle_response or 'candles' not in candle_response:
-                print("❌ No candle data received")
-                return None, None
-                
-            data = candle_response['candles']
-            
-            if not data or len(data) < self.slow_period:
-                return None, None
-                
-            # Convert to DataFrame for easy calculation
-            df = pd.DataFrame(data)
-            df['close'] = pd.to_numeric(df['close'])
-            
-            # Calculate moving averages
-            fast_ma = df['close'].rolling(window=self.fast_period).mean().iloc[-1]
-            slow_ma = df['close'].rolling(window=self.slow_period).mean().iloc[-1]
-            
-            return fast_ma, slow_ma
-            
-        except Exception as e:
-            print(f"❌ Error getting data: {e}")
-            return None, None
-    
-    def check_signal(self):
-        """Check for buy/sell signals"""
-        fast_ma, slow_ma = self.get_moving_averages()
-        
-        if fast_ma is None or slow_ma is None:
-            return None
-            
-        print(f"📊 Fast MA: {fast_ma:.5f}, Slow MA: {slow_ma:.5f}")
-        
-        # Simple crossover strategy
-        if fast_ma > slow_ma * 1.001:  # Fast MA 0.1% above slow MA
-            return 'BUY'
-        elif fast_ma < slow_ma * 0.999:  # Fast MA 0.1% below slow MA  
-            return 'SELL'
-        else:
-            return 'HOLD'
-    
-    def execute_trade(self, signal):
-        """Execute trading signal with proper position management"""
-        try:
-            # Close any existing positions first using correct API
-            positions = self.client.get_open_positions()
-            
-            for position in positions:
-                if position.get('symbol') == self.symbol:
-                    # Use the correct close API format
-                    try:
-                        self.client.close_position(
-                            position_id=position.get('id'),
-                            instrument=position.get('symbol'),
-                            order_side=position.get('side'),  # Same side as position
-                            volume=float(position.get('volume'))
-                        )
-                        print(f"✅ Closed existing position: {position.get('side')} {position.get('volume')}")
-                    except Exception as e:
-                        print(f"⚠️ Error closing position {position.get('id')}: {e}")
-            
-            # Open new position based on signal
-            if signal in ['BUY', 'SELL']:
-                try:
-                    # Open position using the working API
-                    result = self.client.open_position(
-                        instrument=self.symbol,
-                        order_side=signal,
-                        volume=self.volume,
-                        sl_price=0,  # We'll add stop loss later
-                        tp_price=0   # We'll add take profit later
-                    )
-                    
-                    if result.get('status') == 'OK':
-                        order_id = result.get('orderId')
-                        print(f"✅ Opened {signal} position for {self.symbol}")
-                        print(f"📋 Order ID: {order_id}")
-                    else:
-                        print(f"❌ Failed to open position: {result}")
-                        
-                except Exception as e:
-                    print(f"❌ Error opening position: {e}")
-                    
-        except Exception as e:
-            print(f"❌ Trade execution error: {e}")
-    
-    def run(self):
-        """Main trading loop"""
-        print(f"🚀 Starting Simple Moving Average Bot for {self.symbol}")
-        print(f"📈 Fast MA: {self.fast_period}, Slow MA: {self.slow_period}")
-        
-        # Login first
-        if not self.client.login():
-            print("❌ Login failed")
-            return
-            
-        while True:
-            try:
-                # Check account info using new API
-                balance_data = self.client.get_balance()
-                balance = balance_data.get('balance', 'Unknown')
-                equity = balance_data.get('equity', 'Unknown') 
-                print(f"💰 Account Balance: ${balance}, Equity: ${equity}")
-                
-                # Check for trading signal
-                signal = self.check_signal()
-                print(f"📶 Signal: {signal}")
-                
-                # Execute trade if signal found
-                if signal in ['BUY', 'SELL']:
-                    self.execute_trade(signal)
-                
-                # Wait 1 hour before next check
-                print("⏰ Waiting 1 hour for next check...")
-                time.sleep(3600)
-                
-            except KeyboardInterrupt:
-                print("\n🛑 Bot stopped by user")
-                break
-            except Exception as e:
-                print(f"❌ Error in main loop: {e}")
-                time.sleep(300)  # Wait 5 minutes before retry
-
-if __name__ == "__main__":
-    bot = SimpleMovingAverageBot()
-    bot.run()
-```
+### Main Methods:
+- `login()` - Authenticate with platform
+- `get_balance()` - Get account balance and equity
+- `get_candles(symbol, interval, count)` - Get historical data
+- `open_position(instrument, order_side, volume)` - Open new position
+- `close_position(position_id, instrument, order_side, volume)` - Close position
+- `get_open_positions()` - Get all open positions
 
 ## Quick Test Algorithm
 
-For rapid testing and validation of trading functions, we provide a quick test algorithm that opens and closes random positions every 10 seconds on BTCUSD (24/7 crypto market). This is perfect for:
+For rapid testing and validation of trading functions, the project includes `quick_test_bot.py` that opens and closes random positions every 10 seconds on BTCUSD (24/7 crypto market). This is perfect for:
 
 - **Fast API Testing**: Verify open/close functions quickly
 - **Platform Validation**: Test all trading endpoints in minutes
@@ -451,9 +122,9 @@ For rapid testing and validation of trading functions, we provide a quick test a
 - **Position Management**: Automatic closure with max position limits
 - **Real-time P&L**: Live balance and equity tracking
 
-### Quick Test Bot (Automatic)
+### Quick Test Bot
 
-Copy and save this code as `quick_test_bot.py`:
+The `quick_test_bot.py` provides multiple testing modes:
 
 ```python
 import pandas as pd
@@ -765,7 +436,7 @@ def test_connection():
                 print("⚠️ No historical data available")
             
             print("\n🎉 All tests passed! Your setup is working correctly.")
-            print("🚀 You can now run: python simple_trading_bot.py")
+            print("🚀 You can now run: python quick_test_bot.py")
             
         except Exception as e:
             print(f"❌ Error during testing: {e}")
@@ -793,23 +464,23 @@ This test will:
 - Complete in 2 minutes with full validation
 - Show real-time P&L and balance changes
 
-### Step 3: Run the Full Algorithm
+### Step 3: Run the Quick Test Bot
 ```bash
-python simple_trading_bot.py
+python quick_test_bot.py
 ```
 
-Your bot will:
+The bot will:
 - Login to the platform
-- Check moving averages every hour
-- Open/close positions based on signals
-- Show account balance and trading activity
+- Offer multiple testing modes (2min, 5min, 10min, continuous)
+- Execute random trades on BTCUSD for testing
+- Show real-time account balance and trading activity
 
-### Step 3: Monitor Performance
+### Step 4: Monitor Performance
 The bot will print:
-- Current account balance
-- Moving average values  
-- Trading signals (BUY/SELL/HOLD)
+- Current account balance and equity
+- Random trading signals (BUY/SELL/HOLD)
 - Position opening/closing confirmations
+- Real-time P&L changes
 
 ## Troubleshooting
 
@@ -944,9 +615,9 @@ python quick_test_bot.py
 python test_btcusd.py
 ```
 
-**3. Run Full Algorithm:**
+**3. Run Quick Test Bot:**
 ```bash
-python simple_trading_bot.py
+python quick_test_bot.py
 ```
 
 **4. Basic Connection Test:**
