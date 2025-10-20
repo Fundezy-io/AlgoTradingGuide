@@ -175,7 +175,12 @@ class QuickTestTradingBot:
             print(f"⚠️ Could not get final position summary: {e}")
     
     def run_continuous(self):
-        """Run continuous random trading (until stopped)"""
+        """
+        Run continuous random trading (until stopped)
+        
+        Note: Tokens are automatically refreshed for long-running operations.
+        This bot can run indefinitely without manual token management!
+        """
         print(f"🚀 Starting Continuous Random Trading Bot for {self.symbol}")
         print(f"⚡ Trading interval: {self.test_interval} seconds")
         print(f"📊 Max positions: {self.max_positions}")
@@ -228,10 +233,10 @@ class QuickTestTradingBot:
                 time.sleep(5)  # Wait 5 seconds before retry
 
     def run_auto_quick_test(self):
-        """Run automatic 2-minute quick test (matches documentation)"""
+        """Run automatic quick test (3 cycles - faster testing)"""
         print(f"🚀 Starting Auto Quick Test Bot for {self.symbol}")
         print(f"⚡ Test interval: {self.test_interval} seconds")
-        print(f"⏱️ Test duration: 2 minutes (12 cycles)")
+        print(f"⏱️ Test duration: 30 seconds (3 cycles)")
         print(f"📊 Max positions: {self.max_positions}")
         print(f"💰 Position size: {self.volume}")
         print("⚠️ Press Ctrl+C to stop early\n")
@@ -241,10 +246,10 @@ class QuickTestTradingBot:
             print("❌ Login failed")
             return
             
-        # Run for 12 cycles (2 minutes)
-        for cycle in range(1, 13):
+        # Run for 3 cycles (30 seconds) - designed to test both open and close
+        for cycle in range(1, 4):
             try:
-                print(f"🔄 === Cycle {cycle}/12 ===")
+                print(f"🔄 === Cycle {cycle}/3 ===")
                 
                 # Get account info
                 balance_data = self.client.get_balance()
@@ -252,11 +257,17 @@ class QuickTestTradingBot:
                 equity = balance_data.get('equity', 'Unknown') 
                 print(f"💰 Balance: ${balance}, Equity: ${equity}")
                 
-                # Generate random signal
-                signal = self.get_random_signal()
+                # Generate strategic signal to ensure both open and close operations
+                if cycle == 1:
+                    signal = 'BUY'  # First cycle: always open a position
+                elif cycle == 2:
+                    signal = 'BUY'  # Second cycle: open another or close if at limit
+                else:  # cycle == 3
+                    signal = 'HOLD'  # Third cycle: force close a position
+                
                 print(f"🎲 Signal: {signal}")
                 
-                # Execute random trade
+                # Execute trade
                 self.execute_random_trade(signal)
                 
                 # Show current positions
@@ -269,7 +280,7 @@ class QuickTestTradingBot:
                         print(f"   • {pos.get('side')} {pos.get('volume')} - ID: {pos.get('id')[:8]}...")
                 
                 # Wait for next cycle (except last one)
-                if cycle < 12:
+                if cycle < 3:
                     print(f"⏳ Waiting {self.test_interval} seconds...\n")
                     time.sleep(self.test_interval)
                 
@@ -300,7 +311,7 @@ if __name__ == "__main__":
     bot = QuickTestTradingBot()
     
     print("🎯 Choose test mode:")
-    print("1. Auto quick test (2 minutes)")
+    print("1. Auto quick test (30 seconds)")
     print("2. Quick test (5 minutes)")
     print("3. Extended test (10 minutes)")
     print("4. Continuous trading (until stopped)")

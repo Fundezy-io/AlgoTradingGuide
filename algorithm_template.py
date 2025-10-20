@@ -257,6 +257,9 @@ class YourTradingAlgorithm:
         Main algorithm loop
         
         Customize the frequency and logic as needed for your strategy
+        
+        Note: The FundezyTradingClient automatically handles token refresh
+        for long-running algorithms. No additional code needed!
         """
         print(f"🚀 Starting {self.__class__.__name__}")
         print("⚠️ Press Ctrl+C to stop\n")

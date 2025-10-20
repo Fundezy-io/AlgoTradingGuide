@@ -10,6 +10,15 @@ def test_connection():
     print("📝 Attempting login...")
     if client.login():
         print("✅ Login successful!")
+        print(f"📧 Email: {client.email}")
+        print(f"🎫 Auth token acquired")
+        print(f"💰 Found {len(client.accounts)} trading accounts")
+        print(f"🎯 Selected account: {client.selected_account}")
+        print(f"🔑 System UUID: {client.system_uuid}")
+        
+        # Show token status
+        token_status = client.get_token_status()
+        print(f"⏰ Token expires in: {token_status['expires_in_minutes']:.1f} minutes")
         
         try:
             # Test account balance

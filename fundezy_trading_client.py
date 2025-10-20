@@ -4,12 +4,19 @@ from datetime import datetime, timedelta
 import json
 from typing import Dict, List, Optional, Any
 import config
+import urllib3
+import time
+import threading
+
+# Disable SSL warnings for API compatibility
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class FundezyTradingClient:
     def __init__(self):
         # Fundezy Trading Platform API configuration
         self.base_url = config.FTP_API_BASE_URL
         self.login_endpoint = "/manager/mtr-login"
+        self.refresh_endpoint = "/manager/refresh-token"
         self.trading_api_base = f"{config.FTP_API_BASE_URL}/mtr-api"
         
         self.email = config.FTP_EMAIL
@@ -17,6 +24,8 @@ class FundezyTradingClient:
         self.broker_id = config.FTP_BROKER_ID
         
         self.session = requests.Session()
+        # Configure session for SSL handling
+        self.session.verify = False  # Disable SSL verification for API compatibility
         self.auth_token = None
         self.trading_api_token = None
         self.trading_account_id = None
@@ -24,6 +33,9 @@ class FundezyTradingClient:
         self.accounts = []
         self.selected_account = None
         self.token_expiry = None
+        self.last_refresh_time = None
+        self.refresh_lock = threading.Lock()  # Thread safety for token refresh
+        self.max_refresh_attempts = 3
         
     def login(self) -> bool:
         """Authenticate with Fundezy platform"""
@@ -61,8 +73,9 @@ class FundezyTradingClient:
                     system_info = self.selected_account.get('offer', {}).get('system', {})
                     self.system_uuid = system_info.get('uuid')
                 
-                # Set token expiry
-                self.token_expiry = datetime.now() + timedelta(hours=24)
+                # Set token expiry to 15 minutes as per API documentation
+                self.token_expiry = datetime.now() + timedelta(minutes=15)
+                self.last_refresh_time = datetime.now()
                 
                 print(f"✅ Login successful")
                 print(f"📧 Email: {data.get('email')}")
@@ -81,12 +94,96 @@ class FundezyTradingClient:
             print(f"❌ Login error: {str(e)}")
             return False
     
+    def refresh_token(self) -> bool:
+        """Refresh authentication token using refresh-token endpoint"""
+        with self.refresh_lock:
+            try:
+                # Check if we recently refreshed (avoid excessive refresh requests)
+                if (self.last_refresh_time and 
+                    datetime.now() - self.last_refresh_time < timedelta(minutes=1)):
+                    return True
+                
+                if not self.auth_token:
+                    print("⚠️ No auth token available, performing full login")
+                    return self.login()
+                
+                print("🔄 Refreshing authentication token...")
+                
+                # Prepare refresh request
+                headers = {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'Cookie': f'co-auth={self.auth_token}'
+                }
+                
+                response = self.session.post(
+                    f"{self.base_url}{self.refresh_endpoint}",
+                    headers=headers,
+                    json={}  # Empty payload as per API documentation
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    # Update token and expiry
+                    self.auth_token = data.get('token', self.auth_token)
+                    self.token_expiry = datetime.now() + timedelta(minutes=15)
+                    self.last_refresh_time = datetime.now()
+                    
+                    print("✅ Token refreshed successfully")
+                    return True
+                    
+                elif response.status_code == 401:
+                    print("🔑 Token refresh failed (401), performing full re-login...")
+                    return self.login()
+                    
+                else:
+                    print(f"❌ Token refresh failed: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    # Try full login as fallback
+                    return self.login()
+                    
+            except Exception as e:
+                print(f"❌ Token refresh error: {str(e)}")
+                # Try full login as fallback
+                return self.login()
+    
+    def _ensure_valid_token(self) -> bool:
+        """Ensure we have a valid token, refresh if necessary"""
+        # Check if token is expired or about to expire (1 minute buffer)
+        if (not self.auth_token or not self.token_expiry or 
+            datetime.now() >= self.token_expiry - timedelta(minutes=1)):
+            
+            if self.auth_token:
+                # Try refresh first
+                return self.refresh_token()
+            else:
+                # No token, do full login
+                return self.login()
+        
+        return True
+    
+    def get_token_status(self) -> Dict[str, Any]:
+        """Get current token status and expiration information"""
+        if not self.token_expiry:
+            return {"status": "no_token", "expires_in": None, "expires_at": None}
+        
+        now = datetime.now()
+        expires_in = (self.token_expiry - now).total_seconds()
+        
+        return {
+            "status": "valid" if expires_in > 0 else "expired",
+            "expires_in_seconds": max(0, expires_in),
+            "expires_in_minutes": max(0, expires_in / 60),
+            "expires_at": self.token_expiry.strftime("%Y-%m-%d %H:%M:%S"),
+            "last_refresh": self.last_refresh_time.strftime("%Y-%m-%d %H:%M:%S") if self.last_refresh_time else None
+        }
+    
     def _get_trading_headers(self) -> Dict[str, str]:
         """Get headers for trading API requests"""
-        # Check if token needs refresh
-        if not self.auth_token or datetime.now() >= self.token_expiry:
-            if not self.login():
-                raise Exception("Failed to authenticate")
+        # Ensure we have a valid token
+        if not self._ensure_valid_token():
+            raise Exception("Failed to authenticate or refresh token")
         
         # Headers format for trading API
         return {
@@ -97,8 +194,8 @@ class FundezyTradingClient:
         }
     
     def _make_trading_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
-                             params: Optional[Dict] = None) -> Dict[str, Any]:
-        """Make trading API request"""
+                             params: Optional[Dict] = None, retry_count: int = 0) -> Dict[str, Any]:
+        """Make trading API request with automatic token refresh on 401 errors"""
         
         if not self.system_uuid:
             raise Exception("System UUID not available - ensure login is successful")
@@ -119,6 +216,15 @@ class FundezyTradingClient:
             
             if response.status_code in [200, 201]:
                 return response.json()
+            elif response.status_code == 401 and retry_count < self.max_refresh_attempts:
+                # Token expired, try to refresh and retry
+                print(f"🔑 Received 401 error, attempting token refresh (attempt {retry_count + 1}/{self.max_refresh_attempts})")
+                
+                if self.refresh_token():
+                    # Retry the request with refreshed token
+                    return self._make_trading_request(method, endpoint, data, params, retry_count + 1)
+                else:
+                    raise Exception("Failed to refresh token after 401 error")
             else:
                 raise Exception(f"Trading API error: {response.status_code} - {response.text}")
                 

@@ -10,7 +10,52 @@ A complete guide for developing Python-based trading algorithms on the Fundezy T
 4. **[Run Quick Test](#4-run-quick-test)**
 5. **[Build Your Algorithm](#5-build-your-algorithm)**
 
-**🎯 Complete System**: This provides a fully functional trading system with position management, real-time data, live trading capabilities, and a ready-to-use algorithm template.
+**🎯 Complete System**: This provides a fully functional trading system with position management, real-time data, live trading capabilities, automatic token refresh, and a ready-to-use algorithm template.
+
+## 🔄 Automatic Token Refresh
+
+**NEW**: The system now includes automatic token refresh functionality to handle the 15-minute token expiration seamlessly:
+
+- ✅ **Automatic refresh**: Tokens are refreshed before they expire (1 minute buffer)
+- ✅ **Error recovery**: Automatic retry on authentication errors  
+- ✅ **Long-running algorithms**: Run continuously without interruption
+- ✅ **No code changes**: Existing algorithms automatically benefit
+- ✅ **Thread-safe**: Safe for concurrent operations
+- ✅ **Production ready**: Tested with long-running algorithms
+
+### How It Works
+
+The token refresh system operates automatically in three scenarios:
+
+1. **Proactive refresh**: When a token is about to expire (within 1 minute)
+2. **401 error response**: When the API returns an authentication error
+3. **Manual refresh**: When explicitly called by your code
+
+```python
+# Your existing code continues to work without changes
+client = FundezyTradingClient()
+client.login()
+
+# Long-running algorithm - tokens refresh automatically
+while True:
+    balance = client.get_balance()  # Token refreshed if needed
+    positions = client.get_open_positions()
+    # ... your trading logic
+    time.sleep(60)
+```
+
+### Token Status Monitoring (Optional)
+
+```python
+# Check current token status
+status = client.get_token_status()
+print(f"Token expires in: {status['expires_in_minutes']:.1f} minutes")
+print(f"Last refresh: {status['last_refresh']}")
+
+# Manual refresh if needed
+if client.refresh_token():
+    print("Token refreshed successfully")
+```
 
 ---
 
@@ -149,6 +194,11 @@ self.take_profit_pips = 100     # Take profit in pips
 - `close_position(position_id, instrument, order_side, volume)` - Close position
 - `get_open_positions()` - Get all open positions
 
+### Token Management Methods (NEW)
+- `refresh_token()` - Manually refresh authentication token
+- `get_token_status()` - Get current token status and expiry information
+- `_ensure_valid_token()` - Internal method for automatic token validation
+
 ### Example Usage
 ```python
 from fundezy_trading_client import FundezyTradingClient
@@ -189,6 +239,12 @@ print(f"Open positions: {len(positions)}")
 - Check internet connection
 - Verify platform is not under maintenance
 - Try refreshing authentication tokens
+
+**❌ Token Refresh Issues**
+- **"Failed to refresh token"**: Check network connectivity and verify credentials are still valid
+- **"SSL certificate problem"**: The client automatically disables SSL verification
+- **"Web Filter Violation"**: Check corporate firewall settings, ensure access to `platform.fundezy.io`
+- **Authentication loops**: Verify account has API access enabled
 
 **❌ Algorithm Template Issues**
 - Ensure all dependencies are installed

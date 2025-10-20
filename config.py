@@ -13,6 +13,10 @@
 # ===== end of template =====
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Non-sensitive default (can be overridden via env)
 FTP_API_BASE_URL = os.environ.get("FTP_API_BASE_URL", "https://platform.fundezy.io")
