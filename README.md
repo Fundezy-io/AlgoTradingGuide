@@ -2,13 +2,23 @@
 
 A complete guide for developing Python-based trading algorithms on the Fundezy Trading Platform via API services.
 
-## 🚀 Quick Start (5 Steps)
+## 📋 Prerequisites
 
-1. **[Install Python Dependencies](#1-install-dependencies)**
-2. **[Setup Credentials](#2-setup-credentials)** 
-3. **[Test Connection](#3-test-connection)**
-4. **[Run Quick Test](#4-run-quick-test)**
-5. **[Build Your Algorithm](#5-build-your-algorithm)**
+Before you begin, ensure you have:
+
+- **Python 3.8+** installed on your system
+- **Git** installed for cloning the repository
+- A **Fundezy Trading Platform** account with API access enabled
+- **Command line/terminal** access
+
+## 🚀 Quick Start (6 Steps)
+
+1. **[Clone Repository](#1-clone-repository)**
+2. **[Install Python Dependencies](#2-install-dependencies)**
+3. **[Setup Credentials](#3-setup-credentials)** 
+4. **[Test Connection](#4-test-connection)**
+5. **[Run Quick Test](#5-run-quick-test)**
+6. **[Build Your Algorithm](#6-build-your-algorithm)**
 
 **🎯 Complete System**: This provides a fully functional trading system with position management, real-time data, live trading capabilities, automatic token refresh, and a ready-to-use algorithm template.
 
@@ -59,13 +69,33 @@ if client.refresh_token():
 
 ---
 
-## 1. Install Dependencies
+## 1. Clone Repository
+
+First, clone this repository to your local machine:
 
 ```bash
-pip install requests pandas numpy
+# Clone the repository
+git clone https://github.com/Fundezy-io/AlgoTradingGuide.git
+
+# Navigate to the project directory
+cd AlgoTradingGuide
 ```
 
-## 2. Setup Credentials
+> **💡 Tip**: If you don't have Git installed, download it from [git-scm.com](https://git-scm.com/) or download the repository as a ZIP file from GitHub.
+
+## 2. Install Dependencies
+
+Make sure you're in the project directory, then install the required Python packages:
+
+```bash
+# Install required packages
+pip install requests pandas numpy
+
+# Or install from requirements file
+pip install -r requirements.txt
+```
+
+## 3. Setup Credentials
 
 Create a `.env` file in the project root:
 
@@ -78,7 +108,7 @@ FTP_BROKER_ID=107
 
 > **Note**: All sensitive data is loaded from environment variables - nothing sensitive is committed to git.
 
-## 3. Test Connection
+## 4. Test Connection
 
 ```bash
 python test_connection.py
@@ -86,7 +116,7 @@ python test_connection.py
 
 This verifies your credentials and platform connectivity.
 
-## 4. Run Quick Test
+## 5. Run Quick Test
 
 ```bash
 python quick_test_bot.py
@@ -107,7 +137,7 @@ python quick_test_bot.py
 📊 Open positions: 1
 ```
 
-## 5. Build Your Algorithm
+## 6. Build Your Algorithm
 
 ### Option A: Use the Template (Recommended)
 
@@ -223,7 +253,23 @@ print(f"Open positions: {len(positions)}")
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### Common Setup Issues
+
+**❌ Repository Cloning Issues**
+- **"Git not found"**: Install Git from [git-scm.com](https://git-scm.com/)
+- **"Permission denied"**: Use HTTPS URL instead of SSH, or download ZIP file from GitHub
+- **"Directory not empty"**: Choose a different directory or remove existing files
+
+**❌ Python/Dependencies Issues**
+- **"Python not found"**: Install Python 3.8+ from [python.org](https://python.org/)
+- **"pip not found"**: Ensure Python was installed with pip, or install pip separately
+- **"Module not found"**: Make sure you're in the correct project directory and ran `pip install`
+
+**❌ File/Directory Issues**
+- **"No such file or directory"**: Ensure you're in the `AlgoTradingGuide` directory after cloning
+- **"Permission denied"**: Check file permissions or run terminal as administrator (Windows)
+
+### Common Runtime Issues
 
 **❌ Login Failed**
 - Check credentials in `.env` file
